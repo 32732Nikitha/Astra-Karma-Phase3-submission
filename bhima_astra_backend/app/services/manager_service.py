@@ -261,7 +261,7 @@ def get_manager_dashboard_stats(db, manager_id: int):
             text("""
             SELECT COUNT(*) FROM manager_disruption_flags
             WHERE manager_id = :mid
-              AND flagged_at >= :week_start
+              AND created_at >= :week_start
         """),
             {"mid": manager_id, "week_start": week_start},
         ).fetchone()
@@ -420,7 +420,7 @@ def create_disruption_flag_full(
         INSERT INTO manager_disruption_flags (
             manager_id, zone_id, disruption_type, description,
             evidence_url, estimated_start, estimated_end,
-            flag_status, payout_enabled, flagged_at, route_feasible
+            flag_status, payout_enabled, created_at, route_feasible
         )
         VALUES (
             :manager_id, :zone_id, :disruption_type, :description,
@@ -463,10 +463,10 @@ def get_manager_flags_all(db, manager_id: int):
         text("""
         SELECT flag_id, manager_id, zone_id, disruption_type, description,
                evidence_url, estimated_start, estimated_end, flag_status,
-               payout_enabled, flagged_at, admin_verified, verified_at
+               payout_enabled, created_at, admin_verified, verified_at
         FROM manager_disruption_flags
         WHERE manager_id = :mid
-        ORDER BY flagged_at DESC
+        ORDER BY created_at DESC
     """),
         {"mid": manager_id},
     ).fetchall()
@@ -489,7 +489,7 @@ def get_manager_flags_all(db, manager_id: int):
                 else None,
                 "flag_status": row.flag_status,
                 "payout_enabled": row.payout_enabled,
-                "flagged_at": row.flagged_at.isoformat() if row.flagged_at else None,
+                "flagged_at": row.created_at.isoformat() if row.created_at else None,
                 "admin_verified": row.admin_verified,
                 "verified_at": row.verified_at.isoformat() if row.verified_at else None,
             }

@@ -6,5 +6,27 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5174,
+    proxy: {
+      "/auth": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/manager": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/zones": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/workers": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/policies": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+    },
   },
 });

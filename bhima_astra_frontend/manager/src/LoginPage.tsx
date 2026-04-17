@@ -1,7 +1,15 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Shield, Eye, EyeOff, ArrowRight, Lock, User, ChevronLeft } from "lucide-react";
+import {
+  Shield,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  Lock,
+  User,
+  ChevronLeft,
+} from "lucide-react";
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -19,7 +27,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     e.preventDefault();
     setError("");
     if (!managerId.trim()) {
-      setError("Manager ID is required.");
+      setError("Email is required.");
       return;
     }
     if (!password.trim()) {
@@ -27,10 +35,35 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       return;
     }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 900));
-    setLoading(false);
-    onLogin();
-    navigate("/manager/dashboard");
+    try {
+      const BASE_URL =
+        (import.meta as unknown as { env: Record<string, string> }).env
+          .VITE_API_BASE_URL || "http://localhost:8000";
+      const res = await fetch(`${BASE_URL}/auth/manager/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: managerId, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Invalid credentials");
+      }
+      const data = await res.json();
+      localStorage.setItem("bhima_manager_token", data.access_token);
+      localStorage.setItem("bhima_manager_id", String(data.manager_id));
+      localStorage.setItem("bhima_manager_name", data.manager_name || "");
+      localStorage.setItem(
+        "bhima_manager_zones",
+        JSON.stringify(data.assigned_zones || []),
+      );
+      localStorage.setItem("managerLoggedIn", "true");
+      onLogin();
+      navigate("/manager/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const stats = [
@@ -338,7 +371,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           >
             {/* Go Back Button */}
             <motion.button
-              onClick={() => window.location.href = '/'}
+              onClick={() => (window.location.href = "/")}
               style={{
                 marginBottom: 24,
                 background: "none",
@@ -357,12 +390,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 transition: "all 0.2s",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = "var(--text-primary)";
-                (e.currentTarget as HTMLButtonElement).style.color = "var(--bg-primary)";
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "var(--text-primary)";
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  "var(--bg-primary)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = "none";
-                (e.currentTarget as HTMLButtonElement).style.color = "var(--text-primary)";
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "none";
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  "var(--text-primary)";
               }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -398,16 +435,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   className="ui-label"
                   style={{ display: "block", marginBottom: 8 }}
                 >
-                  Manager ID
+                  Email
                 </label>
                 <div className="mgr-input-row">
                   <div className="mgr-input-icon">
                     <User style={{ width: 14, height: 14 }} />
                   </div>
                   <input
-                    type="text"
+                    type="email"
                     className="mgr-input-field"
-                    placeholder="e.g. MGR-WEST-01"
+                    placeholder="ravi.manager@bhima.com"
                     value={managerId}
                     autoComplete="username"
                     onChange={(e) => {

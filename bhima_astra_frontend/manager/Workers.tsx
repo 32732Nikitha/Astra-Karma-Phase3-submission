@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -21,6 +21,9 @@ import {
   Calendar,
 } from "lucide-react";
 
+import { useManager } from "./src/context/ManagerContext";
+import { getZoneWorkers } from "./src/services/managerApi";
+
 interface Worker {
   id: number;
   worker_name: string;
@@ -31,7 +34,7 @@ interface Worker {
   income_today: number;
   orders_today: number;
   fraud_risk_score: number;
-  policy_status: "active" | "expired" | "pending";
+  policy_status: "active" | "expired" | "pending" | "none";
   zone_id: string;
   days_since_active: number;
   kyc_status: "verified" | "pending" | "flagged";
@@ -42,6 +45,7 @@ const Workers: React.FC = () => {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [filteredWorkers, setFilteredWorkers] = useState<Worker[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<
     "all" | "online" | "offline"
   >("all");
@@ -52,88 +56,80 @@ const Workers: React.FC = () => {
   const [selectedWorkerDetails, setSelectedWorkerDetails] =
     useState<Worker | null>(null);
 
-  // Mock data - All workers from same dark store platform
+  const { profile } = useManager();
+
+  // Map API WorkerInZone to local Worker interface
+  const mapApiWorker = (
+    w: {
+      worker_id: number;
+      worker_name: string | null;
+      platform: string | null;
+      vehicle_type: string | null;
+      geo_zone_id: string | null;
+      fraud_risk_score: number | null;
+      kyc_verified: boolean | null;
+      payment_verified_status: string | null;
+      upi_id: string | null;
+      policy_status: string | null;
+      plan_tier: string | null;
+    },
+    idx: number,
+  ): Worker => {
+    const score = w.fraud_risk_score ?? 0;
+    const kyc = w.kyc_verified;
+    return {
+      id: idx + 1,
+      worker_name: w.worker_name ?? "Unknown",
+      worker_id: w.worker_id,
+      platform: w.platform ?? "—",
+      vehicle_type: w.vehicle_type ?? "—",
+      status: (kyc ? "online" : "offline") as "online" | "offline",
+      income_today: 0,
+      orders_today: 0,
+      fraud_risk_score: score,
+      policy_status: (w.policy_status ?? "none") as
+        | "active"
+        | "expired"
+        | "pending"
+        | "none",
+      zone_id: w.geo_zone_id ?? "—",
+      days_since_active: 0,
+      kyc_status: (kyc
+        ? "verified"
+        : w.payment_verified_status === "flagged"
+          ? "flagged"
+          : "pending") as "verified" | "pending" | "flagged",
+    };
+  };
+
+  const fetchWorkers = useCallback(async () => {
+    const zones = profile?.assigned_zones ?? [];
+    if (zones.length === 0) return;
+    setLoading(true);
+    try {
+      const allResults = await Promise.allSettled(
+        zones.map((z) => getZoneWorkers(z)),
+      );
+      const combined: Worker[] = [];
+      allResults.forEach((res) => {
+        if (res.status === "fulfilled") {
+          res.value.forEach((w, i) =>
+            combined.push(mapApiWorker(w, combined.length + i)),
+          );
+        }
+      });
+      setWorkers(combined);
+      setFilteredWorkers(combined);
+    } catch {
+      // keep empty
+    } finally {
+      setLoading(false);
+    }
+  }, [profile?.assigned_zones?.join(",")]);
+
   useEffect(() => {
-    const mockWorkers: Worker[] = [
-      {
-        id: 1,
-        worker_name: "Raj Kumar",
-        worker_id: 1024,
-        platform: "Blinkit Dark Store",
-        vehicle_type: "bike",
-        status: "online",
-        income_today: 820,
-        orders_today: 18,
-        fraud_risk_score: 0.12,
-        policy_status: "active",
-        zone_id: "MUM-WEST-01",
-        days_since_active: 0,
-        kyc_status: "verified",
-      },
-      {
-        id: 2,
-        worker_name: "Priya Sharma",
-        worker_id: 1025,
-        platform: "Blinkit Dark Store",
-        vehicle_type: "scooter",
-        status: "offline",
-        income_today: 450,
-        orders_today: 12,
-        fraud_risk_score: 0.08,
-        policy_status: "active",
-        zone_id: "MUM-WEST-01",
-        days_since_active: 1,
-        kyc_status: "verified",
-      },
-      {
-        id: 3,
-        worker_name: "Amit Patel",
-        worker_id: 1026,
-        platform: "Blinkit Dark Store",
-        vehicle_type: "bike",
-        status: "online",
-        income_today: 680,
-        orders_today: 15,
-        fraud_risk_score: 0.35,
-        policy_status: "active",
-        zone_id: "MUM-WEST-01",
-        days_since_active: 0,
-        kyc_status: "pending",
-      },
-      {
-        id: 4,
-        worker_name: "Sneha Reddy",
-        worker_id: 1027,
-        platform: "Blinkit Dark Store",
-        vehicle_type: "cycle",
-        status: "offline",
-        income_today: 320,
-        orders_today: 8,
-        fraud_risk_score: 0.67,
-        policy_status: "expired",
-        zone_id: "MUM-WEST-01",
-        days_since_active: 3,
-        kyc_status: "flagged",
-      },
-      {
-        id: 5,
-        worker_name: "Vikram Singh",
-        worker_id: 1028,
-        platform: "Blinkit Dark Store",
-        vehicle_type: "bike",
-        status: "online",
-        income_today: 950,
-        orders_today: 22,
-        fraud_risk_score: 0.05,
-        policy_status: "active",
-        zone_id: "MUM-WEST-01",
-        days_since_active: 0,
-        kyc_status: "verified",
-      },
-    ];
-    setWorkers(mockWorkers);
-    setFilteredWorkers(mockWorkers);
-  }, []);
+    fetchWorkers();
+  }, [fetchWorkers]);
 
   // Filter workers
   useEffect(() => {
@@ -211,8 +207,19 @@ const Workers: React.FC = () => {
     }
 
     // Create CSV header
-    const headers = ["Worker Name", "ID", "Platform", "Status", "Income Today", "Orders", "Risk Score", "Policy", "Zone", "KYC Status"];
-    
+    const headers = [
+      "Worker Name",
+      "ID",
+      "Platform",
+      "Status",
+      "Income Today",
+      "Orders",
+      "Risk Score",
+      "Policy",
+      "Zone",
+      "KYC Status",
+    ];
+
     // Create CSV rows
     const rows = filteredWorkers.map((worker) => [
       worker.worker_name,
@@ -238,7 +245,10 @@ const Workers: React.FC = () => {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `workers-list-${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute(
+      "download",
+      `workers-list-${new Date().toISOString().split("T")[0]}.csv`,
+    );
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
@@ -309,7 +319,7 @@ const Workers: React.FC = () => {
               >
                 REQUEST PAYOUT ({selectedWorkers.length})
               </motion.button>
-              <button 
+              <button
                 onClick={handleDownload}
                 className="text-gray-600 hover:text-gray-900"
                 title="Download workers list as CSV"

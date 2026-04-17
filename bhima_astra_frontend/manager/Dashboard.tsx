@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -13,91 +13,48 @@ import {
   LogOut,
 } from "lucide-react";
 import ManagerZoneMap from "./ManagerZoneMap";
-
-// Single zone for dark store manager
-const MANAGER_ZONE = {
-  id: "MUM-WEST-01",
-  name: "Andheri West Dark Store",
-  active_workers: 67,
-  composite_score: 0.45,
-  last_trigger: { type: "rainfall", time: "2h ago", severity: "L2" },
-  pending_flags: 2,
-  active_payouts: 3,
-  status: "normal",
-};
-
-// Mock worker feed data
-const MOCK_WORKER_FEED = [
-  {
-    id: 1,
-    worker_name: "Raj Kumar",
-    worker_id: 1024,
-    status: "online",
-    income_today: 820,
-    orders_today: 18,
-    fraud_risk_score: 0.12,
-    policy_status: "active",
-    zone_id: "MUM-WEST-01",
-    last_gps: { lat: 19.076, lng: 72.8777 },
-    timestamp: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    worker_name: "Priya Sharma",
-    worker_id: 1025,
-    status: "offline",
-    income_today: 450,
-    orders_today: 12,
-    fraud_risk_score: 0.08,
-    policy_status: "active",
-    zone_id: "MUM-EAST-02",
-    last_gps: { lat: 19.084, lng: 72.889 },
-    timestamp: new Date().toISOString(),
-  },
-];
-
-// Mock trigger events
-const MOCK_TRIGGERS = [
-  {
-    id: 1,
-    zone_id: "MUM-EAST-02",
-    trigger_type: "heat",
-    severity: "L1",
-    timestamp: "2026-04-15T13:30:00Z",
-    workers_affected: 45,
-    total_payout: 22500,
-    fraud_holds: 2,
-  },
-  {
-    id: 2,
-    zone_id: "MUM-WEST-01",
-    trigger_type: "rainfall",
-    severity: "L2",
-    timestamp: "2026-04-15T11:15:00Z",
-    workers_affected: 67,
-    total_payout: 40200,
-    fraud_holds: 1,
-  },
-];
-
-// Mock stats
-const MOCK_STATS = {
-  new_registrations: 38,
-  payouts_processed: 285600,
-  flags_raised: 3,
-  offline_workers_paid: 12,
-  fraud_holds: 2,
-};
+import { useManager } from "./src/context/ManagerContext";
+import { getZoneWorkers, type WorkerInZone } from "./src/services/managerApi";
 
 const ManagerDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [workerFeed, setWorkerFeed] = useState<WorkerInZone[]>([]);
+  const [workerLoading, setWorkerLoading] = useState(false);
 
-  const [workerFeed, setWorkerFeed] = useState(MOCK_WORKER_FEED);
+  // ── Context data ─────────────────────────────────────────────────────────
+  const { profile, stats, zoneLiveData, zoneTriggers, loading } = useManager();
+
+  // Derive primary zone from profile
+  const primaryZone = profile?.assigned_zones?.[0] ?? "";
+  const allZones = profile?.assigned_zones ?? [];
+
+  // Zone live data for the primary zone
+  const primaryLive = primaryZone ? (zoneLiveData[primaryZone] ?? null) : null;
+
+  // Aggregate triggers across all assigned zones
+  const allTriggers = allZones.flatMap((z) =>
+    (zoneTriggers[z] ?? []).map((t) => ({ ...t, zone_id: z })),
+  );
+
+  // Derived stats with API fallback to zeros
+  const dashStats = stats ?? {
+    new_registrations: 0,
+    payouts_processed: 0,
+    flags_raised: 0,
+    offline_workers_paid: 0,
+    fraud_holds: 0,
+    total_active_workers: 0,
+    total_active_policies: 0,
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("managerLoggedIn");
-    window.location.href = "/manager/login";
+    localStorage.removeItem("bhima_manager_token");
+    localStorage.removeItem("bhima_manager_id");
+    localStorage.removeItem("bhima_manager_name");
+    localStorage.removeItem("bhima_manager_zones");
+    navigate("/manager/login");
   };
 
   // Update clock
@@ -108,28 +65,23 @@ const ManagerDashboard: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Simulate real-time worker updates
+  // Fetch workers for primary zone when profile is ready
+  const fetchWorkers = useCallback(async () => {
+    if (!primaryZone) return;
+    setWorkerLoading(true);
+    try {
+      const data = await getZoneWorkers(primaryZone);
+      setWorkerFeed(data.slice(0, 10)); // show top 10
+    } catch {
+      // keep empty feed
+    } finally {
+      setWorkerLoading(false);
+    }
+  }, [primaryZone]);
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Simulate worker status changes
-      setWorkerFeed((prev) =>
-        prev.map((worker) => ({
-          ...worker,
-          status:
-            Math.random() > 0.7
-              ? worker.status === "online"
-                ? "offline"
-                : "online"
-              : worker.status,
-          income_today:
-            worker.status === "online"
-              ? worker.income_today + Math.floor(Math.random() * 50)
-              : worker.income_today,
-        })),
-      );
-    }, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    fetchWorkers();
+  }, [fetchWorkers]);
 
   const getScoreColor = (score: number): string => {
     if (score < 0.4) return "#7A9F8C";
@@ -184,7 +136,7 @@ const ManagerDashboard: React.FC = () => {
                   BHIMA ASTRA
                 </h1>
                 <p className="ui-label" style={{ color: "#666666" }}>
-                  Dark Store Manager
+                  {profile?.manager_name ?? "Dark Store Manager"}
                 </p>
               </div>
             </div>
@@ -234,17 +186,22 @@ const ManagerDashboard: React.FC = () => {
                   className="w-5 h-5"
                   style={{ color: "#666666", cursor: "pointer" }}
                 />
-                {MANAGER_ZONE.status === "alert" && (
+                {primaryLive?.trigger_recommended && (
                   <div
-                    c
-                onClick={handleLogout}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
-              lassName="absolute -top-1 -right-1 w-2 h-2"
+                    className="absolute -top-1 -right-1 w-2 h-2"
                     style={{ backgroundColor: "#1a1a1a", borderRadius: "50%" }}
-                  ></div>
+                  />
                 )}
               </div>
-              <button>
+              <button
+                onClick={handleLogout}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
                 <LogOut className="w-5 h-5" style={{ color: "#666666" }} />
               </button>
             </div>
@@ -262,14 +219,21 @@ const ManagerDashboard: React.FC = () => {
             className="font-display mb-4"
             style={{ fontSize: "2.6875rem", fontWeight: 700, color: "#000000" }}
           >
-            {MANAGER_ZONE.name}
+            {primaryZone
+              ? `${primaryZone} Dark Store`
+              : loading
+                ? "Loading..."
+                : "Manager Dashboard"}
           </h1>
           <p className="ui-text" style={{ color: "#666666" }}>
             Managing{" "}
             <span style={{ color: "#000000", fontWeight: 700 }}>
-              {MANAGER_ZONE.active_workers}
+              {primaryLive?.worker_count ?? dashStats.total_active_workers}
             </span>{" "}
-            active workers
+            workers · Zones:{" "}
+            <span style={{ color: "#000000", fontWeight: 700 }}>
+              {allZones.join(", ") || "—"}
+            </span>
           </p>
         </div>
 
@@ -291,7 +255,7 @@ const ManagerDashboard: React.FC = () => {
                   className="ui-data"
                   style={{ fontSize: "1.6875rem", marginTop: "4px" }}
                 >
-                  {MOCK_STATS.new_registrations}
+                  {dashStats.new_registrations}
                 </p>
               </div>
               <Users className="w-8 h-8" style={{ color: "#cccccc" }} />
@@ -315,7 +279,7 @@ const ManagerDashboard: React.FC = () => {
                   className="ui-data"
                   style={{ fontSize: "1.6875rem", marginTop: "4px" }}
                 >
-                  ₹{MOCK_STATS.payouts_processed.toLocaleString()}
+                  ₹{dashStats.payouts_processed.toLocaleString()}
                 </p>
               </div>
               <DollarSign className="w-8 h-8" style={{ color: "#cccccc" }} />
@@ -339,7 +303,7 @@ const ManagerDashboard: React.FC = () => {
                   className="ui-data"
                   style={{ fontSize: "1.6875rem", marginTop: "4px" }}
                 >
-                  {MOCK_STATS.flags_raised}
+                  {dashStats.flags_raised}
                 </p>
               </div>
               <AlertTriangle className="w-8 h-8" style={{ color: "#cccccc" }} />
@@ -363,7 +327,7 @@ const ManagerDashboard: React.FC = () => {
                   className="ui-data"
                   style={{ fontSize: "1.6875rem", marginTop: "4px" }}
                 >
-                  {MOCK_STATS.offline_workers_paid}
+                  {dashStats.offline_workers_paid}
                 </p>
               </div>
               <WifiOff className="w-8 h-8" style={{ color: "#cccccc" }} />
@@ -387,7 +351,7 @@ const ManagerDashboard: React.FC = () => {
                   className="ui-data"
                   style={{ fontSize: "1.6875rem", marginTop: "4px" }}
                 >
-                  {MOCK_STATS.fraud_holds}
+                  {dashStats.fraud_holds}
                 </p>
               </div>
               <Shield className="w-8 h-8" style={{ color: "#cccccc" }} />
@@ -403,103 +367,133 @@ const ManagerDashboard: React.FC = () => {
           >
             Zone Overview
           </h2>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-6 rounded-lg cursor-pointer transition-colors"
-            style={{ backgroundColor: "#ffffff", border: "1px solid #e8e8e8" }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="ui-data" style={{ fontSize: "1.3125rem" }}>
-                {MANAGER_ZONE.name}
-              </h3>
-              <MapPin className="w-5 h-5" style={{ color: "#999999" }} />
+          {allZones.length === 0 && loading ? (
+            <div
+              className="p-6 rounded-lg bg-white"
+              style={{ border: "1px solid #e8e8e8" }}
+            >
+              <p className="ui-label" style={{ color: "#999999" }}>
+                Loading zone data...
+              </p>
             </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <p className="ui-label">Active Workers</p>
-                <p
-                  className="ui-data"
-                  style={{
-                    fontSize: "1.4375rem",
-                    marginTop: "4px",
-                    fontWeight: 700,
-                  }}
-                >
-                  {MANAGER_ZONE.active_workers}
-                </p>
-              </div>
-              <div>
-                <p className="ui-label">Risk Score</p>
-                <p
-                  className="ui-data"
-                  style={{
-                    fontSize: "1.4375rem",
-                    marginTop: "4px",
-                    fontWeight: 700,
-                    color: getScoreColor(MANAGER_ZONE.composite_score),
-                  }}
-                >
-                  {(MANAGER_ZONE.composite_score * 100).toFixed(0)}%
-                </p>
-              </div>
+          ) : (
+            <div className="space-y-4">
+              {allZones.map((zone) => {
+                const liveData = zoneLiveData[zone] ?? null;
+                const score = liveData?.zone_risk_score ?? 0;
+                const workerCount = liveData?.worker_count ?? 0;
+                const triggerCount = liveData?.disruption_events ?? 0;
+                const flagCount = liveData?.manager_flags ?? 0;
+                return (
+                  <motion.div
+                    key={zone}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-6 rounded-lg cursor-pointer transition-colors"
+                    style={{
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #e8e8e8",
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="ui-data" style={{ fontSize: "1.3125rem" }}>
+                        {zone}
+                      </h3>
+                      <MapPin
+                        className="w-5 h-5"
+                        style={{ color: "#999999" }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <p className="ui-label">Workers</p>
+                        <p
+                          className="ui-data"
+                          style={{
+                            fontSize: "1.4375rem",
+                            marginTop: "4px",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {workerCount}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="ui-label">Risk Score</p>
+                        <p
+                          className="ui-data"
+                          style={{
+                            fontSize: "1.4375rem",
+                            marginTop: "4px",
+                            fontWeight: 700,
+                            color: getScoreColor(score),
+                          }}
+                        >
+                          {(score * 100).toFixed(0)}%
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="ui-label">Composite Score</p>
+                        <span
+                          className="ui-label"
+                          style={{ color: getScoreColor(score) }}
+                        >
+                          {score < 0.4
+                            ? "LOW"
+                            : score < 0.65
+                              ? "MEDIUM"
+                              : "HIGH"}
+                        </span>
+                      </div>
+                      <div
+                        className="w-full h-2"
+                        style={{
+                          backgroundColor: "#e8e8e8",
+                          borderRadius: "9999px",
+                        }}
+                      >
+                        <div
+                          className="h-2 rounded-full transition-all"
+                          style={{
+                            width: `${score * 100}%`,
+                            backgroundColor: getScoreColor(score),
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between ui-text">
+                        <span style={{ color: "#666666" }}>
+                          Disruption Events:
+                        </span>
+                        <span style={{ color: "#000000" }}>{triggerCount}</span>
+                      </div>
+                      <div className="flex items-center justify-between ui-text">
+                        <span style={{ color: "#666666" }}>Pending Flags:</span>
+                        <span style={{ color: "#000000" }}>{flagCount}</span>
+                      </div>
+                      <div className="flex items-center justify-between ui-text">
+                        <span style={{ color: "#666666" }}>
+                          Trigger Active:
+                        </span>
+                        <span
+                          style={{
+                            color: liveData?.trigger_recommended
+                              ? "#A55F4F"
+                              : "#7A9F8C",
+                          }}
+                        >
+                          {liveData?.trigger_recommended ? "YES" : "NO"}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
-
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="ui-label">Composite Score</p>
-                <span
-                  className="ui-label"
-                  style={{ color: getScoreColor(MANAGER_ZONE.composite_score) }}
-                >
-                  {MANAGER_ZONE.composite_score < 0.4
-                    ? "LOW"
-                    : MANAGER_ZONE.composite_score < 0.65
-                      ? "MEDIUM"
-                      : "HIGH"}
-                </span>
-              </div>
-              <div
-                className="w-full h-2"
-                style={{ backgroundColor: "#e8e8e8", borderRadius: "9999px" }}
-              >
-                <div
-                  className="h-2 rounded-full transition-all"
-                  style={{
-                    width: `${MANAGER_ZONE.composite_score * 100}%`,
-                    backgroundColor: getScoreColor(
-                      MANAGER_ZONE.composite_score,
-                    ),
-                  }}
-                ></div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {MANAGER_ZONE.last_trigger && (
-                <div className="flex items-center justify-between ui-text">
-                  <span style={{ color: "#666666" }}>Last Trigger:</span>
-                  <span style={{ color: "#000000" }}>
-                    {MANAGER_ZONE.last_trigger.type} ·{" "}
-                    {MANAGER_ZONE.last_trigger.time}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center justify-between ui-text">
-                <span style={{ color: "#666666" }}>Pending Flags:</span>
-                <span style={{ color: "#000000" }}>
-                  {MANAGER_ZONE.pending_flags}
-                </span>
-              </div>
-              <div className="flex items-center justify-between ui-text">
-                <span style={{ color: "#666666" }}>Active Payouts:</span>
-                <span style={{ color: "#000000" }}>
-                  {MANAGER_ZONE.active_payouts}
-                </span>
-              </div>
-            </div>
-          </motion.div>
+          )}
         </div>
 
         {/* Live Zone Map and Trigger Events */}
@@ -528,87 +522,126 @@ const ManagerDashboard: React.FC = () => {
               Recent Trigger Events
             </h2>
             <div className="space-y-4">
-              {MOCK_TRIGGERS.map((trigger) => (
-                <div
-                  key={trigger.id}
-                  className="p-4 rounded-lg"
+              {allTriggers.length === 0 ? (
+                <p
+                  className="ui-text"
                   style={{
-                    backgroundColor: "#f5f5f5",
-                    border: "1px solid #e8e8e8",
+                    color: "#999999",
+                    textAlign: "center",
+                    padding: "24px 0",
                   }}
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <span
-                      className="font-display"
-                      style={{
-                        fontSize: "1.125rem",
-                        fontWeight: 700,
-                        color: "#000000",
-                      }}
-                    >
-                      {trigger.trigger_type.toUpperCase()}
-                    </span>
-                    <span
-                      className="ui-label px-3 py-1 rounded"
-                      style={{ backgroundColor: "#A55F4F", color: "#ffffff" }}
-                    >
-                      {trigger.severity}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 ui-text">
-                    <div>
-                      <span style={{ color: "#666666" }}>
-                        Workers Affected:
-                      </span>
+                  {loading
+                    ? "Loading trigger events..."
+                    : "No recent trigger events"}
+                </p>
+              ) : (
+                allTriggers.map((trigger) => (
+                  <div
+                    key={`${trigger.claim_id}-${trigger.zone_id}`}
+                    className="p-4 rounded-lg"
+                    style={{
+                      backgroundColor: "#f5f5f5",
+                      border: "1px solid #e8e8e8",
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
                       <span
+                        className="font-display"
                         style={{
+                          fontSize: "1.125rem",
+                          fontWeight: 700,
                           color: "#000000",
-                          marginLeft: "8px",
-                          fontWeight: 600,
                         }}
                       >
-                        {trigger.workers_affected}
+                        {(trigger.trigger_type ?? "UNKNOWN").toUpperCase()}
+                      </span>
+                      <span
+                        className="ui-label px-3 py-1 rounded"
+                        style={{ backgroundColor: "#A55F4F", color: "#ffffff" }}
+                      >
+                        {trigger.trigger_level ?? "—"}
                       </span>
                     </div>
-                    <div>
-                      <span style={{ color: "#666666" }}>Total Payout:</span>
-                      <span
-                        style={{
-                          color: "#7A9F8C",
-                          marginLeft: "8px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        ₹{trigger.total_payout.toLocaleString()}
-                      </span>
-                    </div>
-                    <div>
-                      <span style={{ color: "#666666" }}>Fraud Holds:</span>
-                      <span
-                        style={{
-                          color: "#A55F4F",
-                          marginLeft: "8px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {trigger.fraud_holds}
-                      </span>
-                    </div>
-                    <div>
-                      <span style={{ color: "#666666" }}>Time:</span>
-                      <span
-                        style={{
-                          color: "#000000",
-                          marginLeft: "8px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {new Date(trigger.timestamp).toLocaleTimeString()}
-                      </span>
+                    <div className="grid grid-cols-2 gap-2 ui-text">
+                      <div>
+                        <span style={{ color: "#666666" }}>Zone:</span>
+                        <span
+                          style={{
+                            color: "#000000",
+                            marginLeft: "8px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {trigger.zone_id}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: "#666666" }}>Workers:</span>
+                        <span
+                          style={{
+                            color: "#000000",
+                            marginLeft: "8px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {trigger.workers_affected}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: "#666666" }}>Total Payout:</span>
+                        <span
+                          style={{
+                            color: "#7A9F8C",
+                            marginLeft: "8px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          ₹{trigger.total_payout.toLocaleString()}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: "#666666" }}>Fraud Holds:</span>
+                        <span
+                          style={{
+                            color: "#A55F4F",
+                            marginLeft: "8px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {trigger.fraud_holds}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: "#666666" }}>Time:</span>
+                        <span
+                          style={{
+                            color: "#000000",
+                            marginLeft: "8px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {trigger.fired_at
+                            ? new Date(trigger.fired_at).toLocaleTimeString()
+                            : "—"}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: "#666666" }}>Status:</span>
+                        <span
+                          style={{
+                            color: "#000000",
+                            marginLeft: "8px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {trigger.payout_status ?? "—"}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </motion.div>
         </div>
@@ -630,112 +663,142 @@ const ManagerDashboard: React.FC = () => {
             Worker Activity Feed
           </h2>
           <div className="space-y-4">
-            {workerFeed.map((worker) => (
-              <div
-                key={worker.id}
-                className="p-4 rounded-lg"
+            {workerLoading ? (
+              <p
+                className="ui-text"
                 style={{
-                  backgroundColor: "#f5f5f5",
-                  border: "1px solid #e8e8e8",
+                  color: "#999999",
+                  textAlign: "center",
+                  padding: "24px 0",
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{
-                        backgroundColor:
-                          worker.status === "online" ? "#7A9F8C" : "#cccccc",
-                      }}
-                    ></div>
-                    <div>
-                      <p className="ui-data">{worker.worker_name}</p>
-                      <p
-                        className="ui-text"
-                        style={{ color: "#666666", marginTop: "2px" }}
-                      >
-                        ID: {worker.worker_id} · {worker.zone_id}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="flex items-center space-x-2">
-                      {worker.status === "online" ? (
-                        <Wifi
-                          className="w-4 h-4"
-                          style={{ color: "#7A9F8C" }}
+                Loading workers...
+              </p>
+            ) : workerFeed.length === 0 ? (
+              <p
+                className="ui-text"
+                style={{
+                  color: "#999999",
+                  textAlign: "center",
+                  padding: "24px 0",
+                }}
+              >
+                No workers found in assigned zones.
+              </p>
+            ) : (
+              workerFeed.map((worker) => {
+                const riskScore = worker.fraud_risk_score ?? 0;
+                return (
+                  <div
+                    key={worker.worker_id}
+                    className="p-4 rounded-lg"
+                    style={{
+                      backgroundColor: "#f5f5f5",
+                      border: "1px solid #e8e8e8",
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{
+                            backgroundColor: worker.kyc_verified
+                              ? "#7A9F8C"
+                              : "#cccccc",
+                          }}
                         />
-                      ) : (
-                        <WifiOff
-                          className="w-4 h-4"
-                          style={{ color: "#cccccc" }}
-                        />
-                      )}
-                      <span
-                        className="ui-label"
-                        style={{
-                          color:
-                            worker.status === "online" ? "#7A9F8C" : "#999999",
-                        }}
-                      >
-                        {worker.status.toUpperCase()}
-                      </span>
+                        <div>
+                          <p className="ui-data">{worker.worker_name ?? "—"}</p>
+                          <p
+                            className="ui-text"
+                            style={{ color: "#666666", marginTop: "2px" }}
+                          >
+                            ID: {worker.worker_id} · {worker.geo_zone_id} ·{" "}
+                            {worker.platform ?? "—"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="flex items-center space-x-2">
+                          {worker.kyc_verified ? (
+                            <Wifi
+                              className="w-4 h-4"
+                              style={{ color: "#7A9F8C" }}
+                            />
+                          ) : (
+                            <WifiOff
+                              className="w-4 h-4"
+                              style={{ color: "#cccccc" }}
+                            />
+                          )}
+                          <span
+                            className="ui-label"
+                            style={{
+                              color: worker.kyc_verified
+                                ? "#7A9F8C"
+                                : "#999999",
+                            }}
+                          >
+                            {worker.kyc_verified ? "KYC OK" : "KYC PENDING"}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-4 gap-4 mt-4 ui-text">
-                  <div>
-                    <span style={{ color: "#666666" }}>Income Today:</span>
-                    <span
-                      style={{
-                        color: "#000000",
-                        marginLeft: "4px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      ₹{worker.income_today}
-                    </span>
+                    <div className="grid grid-cols-4 gap-4 mt-4 ui-text">
+                      <div>
+                        <span style={{ color: "#666666" }}>Vehicle:</span>
+                        <span
+                          style={{
+                            color: "#000000",
+                            marginLeft: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {worker.vehicle_type ?? "—"}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: "#666666" }}>Plan:</span>
+                        <span
+                          style={{
+                            color: "#000000",
+                            marginLeft: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {worker.plan_tier ?? "—"}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: "#666666" }}>Risk Score:</span>
+                        <span
+                          style={{
+                            color: getRiskColor(riskScore),
+                            marginLeft: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {(riskScore * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: "#666666" }}>Policy:</span>
+                        <span
+                          style={{
+                            color: getPolicyColor(worker.policy_status ?? ""),
+                            marginLeft: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {worker.policy_status ?? "—"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span style={{ color: "#666666" }}>Orders:</span>
-                    <span
-                      style={{
-                        color: "#000000",
-                        marginLeft: "4px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {worker.orders_today}
-                    </span>
-                  </div>
-                  <div>
-                    <span style={{ color: "#666666" }}>Risk Score:</span>
-                    <span
-                      style={{
-                        color: getRiskColor(worker.fraud_risk_score),
-                        marginLeft: "4px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {(worker.fraud_risk_score * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                  <div>
-                    <span style={{ color: "#666666" }}>Policy:</span>
-                    <span
-                      style={{
-                        color: getPolicyColor(worker.policy_status),
-                        marginLeft: "4px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {worker.policy_status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
+                );
+              })
+            )}
           </div>
         </motion.div>
       </div>

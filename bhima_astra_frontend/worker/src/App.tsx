@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { WorkerProvider } from "./context/WorkerContext";
 import { clearToken } from "./services/api";
+import { ManagerProvider } from "../../manager/src/context/ManagerContext";
 import {
   BrowserRouter,
   Routes,
@@ -93,7 +94,9 @@ const ManagerPage: React.FC<{ Component: React.ComponentType }> = ({
   }
   return (
     <CSSSection id="manager" css={managerCSS}>
-      <Component />
+      <ManagerProvider>
+        <Component />
+      </ManagerProvider>
     </CSSSection>
   );
 };
@@ -172,7 +175,10 @@ const AppContent: React.FC = () => {
         element={
           <CSSSection id="manager" css={managerCSS}>
             <ManagerLoginPage
-              onLogin={() => localStorage.setItem("managerLoggedIn", "true")}
+              onLogin={() => {
+                /* JWT + metadata already stored by LoginPage.handleSubmit */
+                localStorage.setItem("managerLoggedIn", "true");
+              }}
             />
           </CSSSection>
         }

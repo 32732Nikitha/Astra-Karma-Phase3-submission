@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
 import { ArrowLeft, AlertTriangle, Download } from "lucide-react";
+import { useManager } from "./src/context/ManagerContext";
 
 interface DisruptionFlag {
   id: string;
@@ -39,68 +40,88 @@ interface DisruptionFlag {
 const FlagHistory: React.FC = () => {
   const navigate = useNavigate();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { flags: apiFlags, refreshFlags, loading: ctxLoading } = useManager();
 
-  const mockFlags: DisruptionFlag[] = [
-    {
-      id: "disruption-1",
-      zone_id: "MUM-WEST-01",
-      disruption_type: "road_blockage",
-      description: "NH8 blocked due to protest near Andheri flyover",
-      evidence_url: "https://example.com/evidence1.jpg",
-      estimated_start: "2026-04-15T13:30:00Z",
-      estimated_end: "2026-04-15T18:30:00Z",
-      status: "pending",
-      affected_routes: ["route-2", "route-3", "route-5"],
-      created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      workers_without_alternatives: ["Priya Sharma"],
-      affected_workers_count: 1,
-    },
-    {
-      id: "disruption-2",
-      zone_id: "MUM-EAST-02",
-      disruption_type: "strike",
-      description: "Local market vendors on strike affecting delivery access",
-      evidence_url: "https://example.com/evidence2.jpg",
-      estimated_start: "2026-04-14T10:00:00Z",
-      estimated_end: "2026-04-14T16:00:00Z",
-      status: "approved",
-      affected_routes: ["route-1", "route-4"],
-      created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-      verified_by: "admin@bhima-astra.com",
-      verified_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-      workers_without_alternatives: ["Amit Patel", "Raj Kumar"],
-      affected_workers_count: 2,
-    },
-    {
-      id: "disruption-3",
-      zone_id: "MUM-CNTRL-03",
-      disruption_type: "curfew",
-      description: "Local curfew declared by municipal authorities",
-      evidence_url: "https://example.com/evidence3.jpg",
-      estimated_start: "2026-04-13T20:00:00Z",
-      estimated_end: "2026-04-14T06:00:00Z",
-      status: "rejected",
-      affected_routes: ["route-6"],
-      created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-      verified_by: "admin@bhima-astra.com",
-      verified_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
-      rejection_reason: "Insufficient evidence provided",
-      workers_without_alternatives: [],
-      affected_workers_count: 0,
-    },
-  ];
+  // Map API flags to the local DisruptionFlag interface used by this component
+  const mapApiFlag = (f: {
+    flag_id: number;
+    manager_id: number;
+    zone_id: string;
+    disruption_type: string;
+    description: string | null;
+    evidence_url: string | null;
+    estimated_start: string | null;
+    estimated_end: string | null;
+    flag_status: string;
+    payout_enabled: boolean;
+    flagged_at: string | null;
+    admin_verified: boolean | null;
+    verified_at: string | null;
+  }): DisruptionFlag => ({
+    id: String(f.flag_id),
+    zone_id: f.zone_id,
+    disruption_type: f.disruption_type as DisruptionFlag["disruption_type"],
+    description: f.description ?? "",
+    evidence_url: f.evidence_url ?? "",
+    estimated_start: f.estimated_start ?? new Date().toISOString(),
+    estimated_end: f.estimated_end ?? new Date().toISOString(),
+    status:
+      f.flag_status === "verified"
+        ? "approved"
+        : f.flag_status === "rejected"
+          ? "rejected"
+          : "pending",
+    affected_routes: [],
+    created_at: f.flagged_at ?? new Date().toISOString(),
+    verified_by: f.admin_verified ? "admin" : undefined,
+    verified_at: f.verified_at ?? undefined,
+    affected_workers_count: 0,
+  });
 
-  const [flags, setFlags] = useState<DisruptionFlag[]>(() => {
+  // Merge API flags with any locally-stored disruptions (from FlagDisruption page)
+  const getLocalFlags = (): DisruptionFlag[] => {
     try {
       const stored = localStorage.getItem("disruptionFlags");
-      if (stored) {
-        return [...JSON.parse(stored), ...mockFlags];
-      }
-    } catch (e) {
-      console.error("Error loading disruptions:", e);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
     }
-    return mockFlags;
-  });
+  };
+
+  // dummy placeholder so old "mockFlags" declaration does not appear — replaced by apiFlags
+  const mockFlags: DisruptionFlag[] = [];
+
+  // Placeholder start that was continued below
+  const _placeholder = {
+    id: "disruption-3",
+    zone_id: "MUM-CNTRL-03",
+    disruption_type: "curfew",
+    description: "Local curfew declared by municipal authorities",
+    evidence_url: "https://example.com/evidence3.jpg",
+    estimated_start: "2026-04-13T20:00:00Z",
+    estimated_end: "2026-04-14T06:00:00Z",
+    status: "rejected",
+  };
+  void _placeholder;
+  void mockFlags;
+
+  // Build the flags list: API flags merged with locally stored flags
+  const [flags, setFlags] = useState<DisruptionFlag[]>([]);
+
+  useEffect(() => {
+    // Whenever the context flags change, rebuild combined list
+    const apiMapped = apiFlags.map(mapApiFlag);
+    const local = getLocalFlags();
+    // Deduplicate by id: API flags take precedence
+    const apiIds = new Set(apiMapped.map((f) => f.id));
+    const localOnly = local.filter((f: DisruptionFlag) => !apiIds.has(f.id));
+    setFlags([...apiMapped, ...localOnly]);
+  }, [apiFlags]);
+
+  // Refresh API flags on mount
+  useEffect(() => {
+    refreshFlags();
+  }, [refreshFlags]);
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -157,8 +178,17 @@ const FlagHistory: React.FC = () => {
     }
 
     // Create CSV header
-    const headers = ["ID", "Zone", "Type", "Description", "Status", "Created At", "Affected Workers", "Routes"];
-    
+    const headers = [
+      "ID",
+      "Zone",
+      "Type",
+      "Description",
+      "Status",
+      "Created At",
+      "Affected Workers",
+      "Routes",
+    ];
+
     // Create CSV rows
     const rows = filteredFlags.map((flag) => [
       flag.id,
@@ -182,7 +212,10 @@ const FlagHistory: React.FC = () => {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `flag-history-${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute(
+      "download",
+      `flag-history-${new Date().toISOString().split("T")[0]}.csv`,
+    );
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
@@ -243,7 +276,7 @@ const FlagHistory: React.FC = () => {
               <div className="ui-text" style={{ color: "#666666" }}>
                 {new Date().toLocaleString("en-IN")}
               </div>
-              <button 
+              <button
                 onClick={handleDownload}
                 className="ui-text"
                 title="Download flag history as CSV"

@@ -367,6 +367,23 @@ const MOCK_DISRUPTIONS: DisruptionFlag[] = [
 const FlagDisruption: React.FC = () => {
   const [movingIndex, setMovingIndex] = useState(0);
   const navigate = useNavigate();
+
+  // Get manager info from localStorage (set during login)
+  const managerId = parseInt(
+    localStorage.getItem("bhima_manager_id") || "1",
+    10,
+  );
+  const managerZones: string[] = (() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("bhima_manager_zones") || '["Vasant Kunj"]',
+      );
+    } catch {
+      return ["Vasant Kunj"];
+    }
+  })();
+  const primaryZone = managerZones[0] ?? "Vasant Kunj";
+
   const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartner[]>(
     MOCK_DELIVERY_PARTNERS,
   );
@@ -396,7 +413,7 @@ const FlagDisruption: React.FC = () => {
     useState<number>(0);
   // Form state
   const [formData, setFormData] = useState({
-    zone_id: "MUM-WEST-01",
+    zone_id: primaryZone,
     disruption_type: "road_blockage" as const,
     description: "",
     evidence_url: "",
@@ -818,11 +835,11 @@ const FlagDisruption: React.FC = () => {
       payout_flag_requests: payoutFlagRequests,
     };
 
-    // Add disruption to list
+    // Add disruption to local list for immediate UI feedback
     setDisruptions((prev) => [...prev, newDisruption]);
     setSelectedDisruption(newDisruption.id);
 
-    // Save to localStorage for FlagHistory page to access
+    // Save to localStorage for FlagHistory page (as local cache)
     try {
       const stored = localStorage.getItem("disruptionFlags");
       let allDisruptions = stored ? JSON.parse(stored) : [];
@@ -832,24 +849,39 @@ const FlagDisruption: React.FC = () => {
       console.error("Error saving to localStorage:", e);
     }
 
-    // Log the payout requests sent to admin
-    if (payoutFlagRequests.length > 0) {
-      console.log("🚨 PAYOUT FLAG REQUESTS SENT TO ADMIN:", payoutFlagRequests);
-      console.log(
-        `Created payouts for ${payoutFlagRequests.length} workers without alternative routes`,
-      );
-    }
-
-    if (workersWithAlternatives.length > 0) {
-      console.log(
-        "✅ Workers with alternative routes (NO payout):",
-        workersWithAlternatives,
+    // POST to real backend API
+    try {
+      const BASE_URL =
+        (import.meta as unknown as { env: Record<string, string> }).env
+          .VITE_API_BASE_URL || "http://localhost:8000";
+      const token = localStorage.getItem("bhima_manager_token") || "";
+      await fetch(`${BASE_URL}/manager/flag-disruption`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          manager_id: managerId,
+          zone_id: formData.zone_id,
+          disruption_type: formData.disruption_type,
+          description: formData.description,
+          evidence_url: formData.evidence_url || null,
+          estimated_start: formData.estimated_start || null,
+          estimated_end: formData.estimated_end || null,
+        }),
+      });
+      console.log("[FlagDisruption] Flag submitted to backend successfully");
+    } catch (err) {
+      console.warn(
+        "[FlagDisruption] Backend submit failed (saved locally):",
+        err,
       );
     }
 
     // Reset form
     setFormData({
-      zone_id: "MUM-WEST-01",
+      zone_id: primaryZone,
       disruption_type: "road_blockage",
       description: "",
       evidence_url: "",
@@ -1395,9 +1427,11 @@ const FlagDisruption: React.FC = () => {
                       className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-gray-500 font-medium"
                       required
                     >
-                      <option value="MUM-WEST-01">
-                        Andheri West Dark Store
-                      </option>
+                      {managerZones.map((zone) => (
+                        <option key={zone} value={zone}>
+                          {zone}
+                        </option>
+                      ))}
                     </select>
                   </div>
 

@@ -5,6 +5,7 @@ import ManagerDashboard from "../Dashboard";
 import Workers from "../Workers";
 import FlagHistory from "../FlagHistory_new";
 import FlagDisruption from "../FlagDisruption";
+import { ManagerProvider } from "./context/ManagerContext";
 
 const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(
@@ -35,7 +36,9 @@ const App: React.FC = () => {
           path="/manager/dashboard"
           element={
             isLoggedIn ? (
-              <ManagerDashboard />
+              <ManagerProvider>
+                <ManagerDashboard />
+              </ManagerProvider>
             ) : (
               <Navigate to="/manager/login" replace />
             )
@@ -46,7 +49,13 @@ const App: React.FC = () => {
         <Route
           path="/manager/workers"
           element={
-            isLoggedIn ? <Workers /> : <Navigate to="/manager/login" replace />
+            isLoggedIn ? (
+              <ManagerProvider>
+                <Workers />
+              </ManagerProvider>
+            ) : (
+              <Navigate to="/manager/login" replace />
+            )
           }
         />
 
@@ -55,7 +64,9 @@ const App: React.FC = () => {
           path="/manager/flag-history"
           element={
             isLoggedIn ? (
-              <FlagHistory />
+              <ManagerProvider>
+                <FlagHistory />
+              </ManagerProvider>
             ) : (
               <Navigate to="/manager/login" replace />
             )
@@ -67,7 +78,9 @@ const App: React.FC = () => {
           path="/manager/flag-disruption"
           element={
             isLoggedIn ? (
-              <FlagDisruption />
+              <ManagerProvider>
+                <FlagDisruption />
+              </ManagerProvider>
             ) : (
               <Navigate to="/manager/login" replace />
             )

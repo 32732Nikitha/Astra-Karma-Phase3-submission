@@ -1,31 +1,43 @@
-# BHIMA ASTRA - GigShield: AI-Powered Parametric Insurance for Gig Delivery Workers
+# BHIMA ASTRA - AI-Powered Parametric Insurance for Gig Economy Workers
 
-**Production-Ready Implementation | Guidewire DEVTrails 2026 Phase 1-3 Complete**
+**Guidewire DEVTrails 2026 | Phase 1 + Phase 2 Integrated | Production-Ready Implementation**
 
-> **GigShield: Automatic income protection for India's 23.5M gig delivery workers. When disruptions strike—rainfall, heatwaves, pollution, curfews—payouts trigger automatically. Zero claims, zero delays, zero friction.**
+> **Automatic income protection for India's 23.5M gig delivery workers.** When disruptions strike—rainfall, heatwaves, pollution, curfews—payouts trigger automatically. Zero claims, zero delays, zero friction.
 
 ## Table of Contents
 
 1. [Executive Summary](#executive-summary)
-2. [The Problem & Solution](#the-problem--solution)
+2. [The Problem & Vision](#the-problem--vision)
 3. [System Architecture](#system-architecture)
 4. [Six-Stage Pipeline](#six-stage-pipeline)
-5. [Key Differentiators](#key-differentiators)
-6. [Technology Stack](#technology-stack)
-7. [Machine Learning Pipeline](#machine-learning-pipeline)
-8. [Multi-Agent System](#multi-agent-system)
-9. [API Specification](#api-specification)
-10. [Database Architecture](#database-architecture)
-11. [Deployment & Infrastructure](#deployment--infrastructure)
-12. [Implementation Status](#implementation-status)
-13. [Financial Model](#financial-model)
-14. [Quick Start Guide](#quick-start-guide)
+5. [Five Key Differentiators](#five-key-differentiators)
+6. [Parametric Trigger System](#parametric-trigger-system)
+7. [AI & Machine Learning Architecture](#ai--machine-learning-architecture)
+8. [Fraud Detection: 4-Stage Adversarial Defense](#fraud-detection-4-stage-adversarial-defense)
+9. [Multi-Agent System Design](#multi-agent-system-design)
+10. [Technology Stack](#technology-stack)
+11. [Backend Implementation](#backend-implementation)
+12. [Frontend Applications](#frontend-applications)
+13. [API Specification](#api-specification)
+14. [Database Architecture](#database-architecture)
+15. [Deployment & Infrastructure](#deployment--infrastructure)
+16. [Financial Model](#financial-model)
+17. [Implementation Status](#implementation-status)
+18. [Quick Start Guide](#quick-start-guide)
+19. [Team & References](#team--references)
 
 ---
 
 ## Executive Summary
 
-**BHIMA ASTRA** is a fully automated, AI-powered parametric insurance platform purpose-built for India's **23.5 million gig delivery workers**. The platform eliminates traditional claims-submission models: when pre-defined environmental thresholds are crossed (rainfall, AQI, temperature), income-protection payouts are triggered **instantly, verified by a four-stage adversarial defense system, and disbursed via UPI—with zero manual intervention**.
+**BHIMA ASTRA** is an enterprise-grade, fully automated, AI-powered parametric insurance platform designed to solve one of India's most pressing labor protection gaps: **23.5 million gig delivery workers with zero income protection against environmental disruptions.**
+
+Unlike traditional insurance that requires claim forms, loss documentation, and manual underwriting, BHIMA ASTRA uses:
+- **Parametric triggers**: Objective environmental thresholds (IMD rainfall, CPCB AQI, temperature)
+- **Instant payouts**: Automatic UPI transfer within 90 seconds of trigger confirmation
+- **AI-powered fraud detection**: 4-stage cascade (rules → LSTM → graph network → LLM) with cost-optimized architecture
+- **Weekly premiums**: Aligned with gig workers' income rhythm (₹49-₹119/week)
+- **Zero friction**: No apps to download, no claims to file, no waiting
 
 ### Core Innovation: Parametric + AI
 
@@ -47,11 +59,11 @@ Unlike traditional insurance:
 
 ---
 
-## The Problem & Solution
+## The Problem & Vision
 
-### Problem: India's Gig Workers Have Zero Income Protection
+### Why This Matters: The Gig Economy Crisis
 
-Today's gig workers face an impossible reality:
+**Gig delivery workers in India face a structural crisis:**
 
 **The Numbers:**
 - 23.5M delivery partners by 2030

@@ -1473,8 +1473,8 @@ After startup, database auto-seeds with demo users:
 | Role | Email / Phone | Password / OTP | Access |
 |------|---------------|---|---|
 | Admin | admin@bhimaastra.in | admin123 | http://localhost:3000 |
-| Manager | manager@bhimaastra.in | manager123 | http://localhost:5174 |
-| Worker | 9876543210 | 123456 | http://localhost:5173 |
+| Manager | ravi.manager@bhima.com | manager123 | http://localhost:5174 |
+| Worker | 9493029001 | 123456 (OTP) | http://localhost:5173 |
 
 ---
 
@@ -1575,7 +1575,7 @@ Your Computer (localhost)
 
 ### Next Steps After Local Setup
 
-1. **Test Worker Flow**: Login as worker (9876543210 / 123456) → Create policy → Submit claim
+1. **Test Worker Flow**: Login as worker (9493029001 / OTP: 123456) → Create policy → Submit claim
 2. **Test Admin Flow**: Login as admin → View claims → Review fraud scores → Approve/reject
 3. **Test Fraud Detection**: Trigger test disruption → Watch auto-creation of claims → See 4-stage fraud cascade
 4. **Explore API**: Visit `http://localhost:8000/docs` for interactive API testing
@@ -1584,7 +1584,7 @@ Your Computer (localhost)
 
 #### 1. Worker Claim Submission
 ```
-1. Login with phone: 9876543210, OTP: 123456
+1. Login with phone: 9493029001, OTP: 123456
 2. Navigate to Dashboard
 3. Select a policy (or create new)
 4. Submit claim with amount & description

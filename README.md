@@ -1393,58 +1393,192 @@ REFRESH MATERIALIZED VIEW worker_fraud_scores;
 Python 3.10+
 Node.js 18+
 Docker & Docker Compose
+macOS/Linux/Windows
 ```
 
-### Backend Setup
+### One-Command Local Setup (Recommended)
+
+```bash
+# Clone repo
+git clone https://github.com/32732Nikitha/Astra-Karma-Phase3-submission.git
+cd Astra-Karma-Phase3-submission
+
+# Run complete setup (backend + frontend)
+./start-dev.sh
+```
+
+Or follow manual setup below:
+
+### Manual Backend Setup (Terminal 1)
 
 ```bash
 cd bhima_astra_backend
 
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Environment setup
+# Copy environment template
 cp .env.example .env
-# Edit .env with your configuration
 
-# Start services (PostgreSQL, Redis)
+# Start PostgreSQL + Redis (Docker)
 docker-compose up -d
 
-# Run database migrations
+# Wait 10 seconds for services to start, then run migrations
+sleep 10
 alembic upgrade head
 
-# Start FastAPI server
+# Start FastAPI server with hot-reload
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**API available at:** `http://localhost:8000`
-**Docs:** `http://localhost:8000/docs`
+✅ **API Backend is Live:**
+- API: `http://localhost:8000`
+- Swagger Docs: `http://localhost:8000/docs`
+- Health Check: `curl http://localhost:8000/health`
 
-### Frontend Setup
+---
 
+### Manual Frontend Setup (Separate Terminals)
+
+**Terminal 2: Worker Portal**
 ```bash
-# Worker Portal
 cd bhima_astra_frontend/worker
 npm install
 npm run dev
-# Available at: http://localhost:5173
+```
+✅ **Available at:** `http://localhost:5173`
 
-# Admin Portal
+**Terminal 3: Admin Dashboard**
+```bash
 cd bhima_astra_frontend/admin
 npm install
 npm run dev
-# Available at: http://localhost:3000
 ```
+✅ **Available at:** `http://localhost:3000`
+
+**Terminal 4: Manager App (Optional)**
+```bash
+cd bhima_astra_frontend/manager
+npm install
+npm run dev
+```
+✅ **Available at:** `http://localhost:5174`
+
+---
 
 ### Demo Credentials
 
 After startup, database auto-seeds with demo users:
 
-| Role | Email / Phone | Password / OTP |
-|------|---------------|----------------|
-| Admin | admin@bhimaastra.in | admin123 |
-| Manager | manager@bhimaastra.in | manager123 |
-| Worker | 9876543210 | 123456 |
+| Role | Email / Phone | Password / OTP | Access |
+|------|---------------|---|---|
+| Admin | admin@bhimaastra.in | admin123 | http://localhost:3000 |
+| Manager | manager@bhimaastra.in | manager123 | http://localhost:5174 |
+| Worker | 9876543210 | 123456 | http://localhost:5173 |
+
+---
+
+### Verify Everything is Running
+
+```bash
+# Check backend health
+curl http://localhost:8000/health
+
+# Check database connection
+curl http://localhost:8000/api/v1/workers/list -H "Authorization: Bearer your-token"
+
+# View API documentation
+open http://localhost:8000/docs
+
+# View admin dashboard
+open http://localhost:3000
+
+# View worker portal
+open http://localhost:5173
+```
+
+---
+
+### Troubleshooting Local Setup
+
+**Port Already in Use?**
+```bash
+# Find process on port 8000
+lsof -i :8000
+kill -9 <PID>
+
+# Or use different ports
+uvicorn app.main:app --reload --port 8001
+```
+
+**Database Connection Error?**
+```bash
+# Restart Docker services
+docker-compose down
+docker-compose up -d
+sleep 10
+alembic upgrade head
+```
+
+**Node Modules Issues?**
+```bash
+# Clear cache and reinstall
+rm -rf node_modules package-lock.json
+npm install
+npm run dev
+```
+
+**Redis Connection Error?**
+```bash
+# Check if Redis is running
+docker ps | grep redis
+
+# Restart if needed
+docker-compose restart redis
+```
+
+---
+
+### Stop All Services
+
+```bash
+# Stop all running services
+docker-compose down              # PostgreSQL + Redis
+# Kill uvicorn (Ctrl+C in Terminal 1)
+# Kill npm dev servers (Ctrl+C in Terminals 2-4)
+```
+
+---
+
+### Architecture of Local Setup
+
+```
+Your Computer (localhost)
+├── Terminal 1: FastAPI Backend (port 8000)
+│   └── uvicorn app.main:app --reload
+│
+├── Terminal 2: Worker Portal (port 5173)
+│   └── React + Vite (npm run dev)
+│
+├── Terminal 3: Admin Dashboard (port 3000)
+│   └── Next.js (npm run dev)
+│
+├── Terminal 4: Manager App (port 5174)
+│   └── React + Vite (npm run dev)
+│
+└── Docker Container
+    ├── PostgreSQL Database (port 5432)
+    └── Redis Cache (port 6379)
+```
+
+---
+
+### Next Steps After Local Setup
+
+1. **Test Worker Flow**: Login as worker (9876543210 / 123456) → Create policy → Submit claim
+2. **Test Admin Flow**: Login as admin → View claims → Review fraud scores → Approve/reject
+3. **Test Fraud Detection**: Trigger test disruption → Watch auto-creation of claims → See 4-stage fraud cascade
+4. **Explore API**: Visit `http://localhost:8000/docs` for interactive API testing
 
 ### Test Flows
 
